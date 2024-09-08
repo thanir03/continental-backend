@@ -1,14 +1,4 @@
-def convertToDict(arr, keys):
-  if not arr: return {}
-  if len(keys) != len(arr): 
-    raise Exception("Error") 
-  res = {}
-  for i in range(0, len(arr)):
-    res[keys[i]] = arr[i]
-  return res
-
-
-
+from src.db import convertToDict
 
 def getUserByEmail(cur, email: str):
   cur.execute("SELECT name, email, auth, password FROM app_user where email = %s;", (email,))

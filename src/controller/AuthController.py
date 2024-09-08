@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from src.db import DB
-from src.auth.AuthDb import getUserByEmail, insertNewUser, updateAuthMethod
+from src.services.authService import getUserByEmail, insertNewUser, updateAuthMethod
 from src.utils import validatePassword, generateJwt, validateEmail
 import bcrypt
 import jwt

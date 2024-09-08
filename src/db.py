@@ -21,3 +21,12 @@ class DB:
       print(e)
       print("Unable to connect to database")
       return None
+    
+def convertToDict(arr, keys):
+  if not arr: return {}
+  if len(keys) != len(arr): 
+    raise Exception("Error") 
+  res = {}
+  for i in range(0, len(arr)):
+    res[keys[i]] = arr[i]
+  return res
