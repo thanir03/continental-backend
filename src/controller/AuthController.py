@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from src.db import DB
 from src.services.authService import getUserByEmail, insertNewUser, updateAuthMethod
-from src.utils import validatePassword, generateJwt, validateEmail
+from src.utils import validatePassword, generateJwt, validateEmail, loginEndpointMiddleware
 import bcrypt
 import jwt
 import os
@@ -53,7 +53,6 @@ def login():
   if res["auth"] == "oauth_google":
      return jsonify({"status": False, "message": "Account is registered using Google"}), 409
  
-  print(res["password"])
   isValidUser = bcrypt.checkpw(password.encode("utf-8"), res["password"].encode("utf-8"))
   if not isValidUser: return jsonify({"status" : False, "message": "Invalid password" })
   del res["password"]
@@ -98,24 +97,13 @@ def register():
 
 @auth_bp.route("/validate-token", methods=["POST"])
 def validate_token():
-  data = request.json
-  if "access_token" not in data :
-        return jsonify({"status": False, "message": "Invalid paramaters", "type": "invalid-params"}), 400
-  
-  accessToken = data["access_token"]
-  try: 
-    payload = jwt.decode(accessToken ,os.getenv("JWT_SECRET"),  algorithms="HS256")
-  except jwt.ExpiredSignatureError:
-    return {"status": False, "message": "Expired Token"} , 401
-  except jwt.InvalidTokenError as e:
-    print(e)
-    return  {"status": False, "message" : "Invalid token"} , 401
-  except Exception:
-    return  {"status": False, "message": "Unknown Exception"} , 401
+  res = loginEndpointMiddleware(request)
+  if not res["status"]:
+     return res, 401 
   
   conn = DB.conn
   cur = conn.cursor()
-  userDetails = getUserByEmail(cur, payload["email"])
+  userDetails = getUserByEmail(cur, res["payload"]["email"])
   if not userDetails:
     return jsonify({"status": True, "message": "Unknown error occurred"})
   del userDetails["password"]
