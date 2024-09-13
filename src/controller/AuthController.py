@@ -97,12 +97,14 @@ def register():
 
 @auth_bp.route("/validate-token", methods=["POST"])
 def validate_token():
-  res = loginEndpointMiddleware(request)
-  if not res["status"]:
-     return res, 401 
-  
   conn = DB.conn
   cur = conn.cursor()
+  res = loginEndpointMiddleware(cur, request)
+  print(res)
+  if not res["status"]:
+     return res, 401
+  
+
   userDetails = getUserByEmail(cur, res["payload"]["email"])
   if not userDetails:
     return jsonify({"status": True, "message": "Unknown error occurred"})

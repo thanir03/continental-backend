@@ -54,12 +54,9 @@ def book_hotel():
   total_price = roomData["price"] * days_difference
   bookingId = bookingService.create_booking(cur, roomId, email, start_date, end_date, no_rooms, total_price ,"PENDING")
   
-  hotelService.update_room_count(cur, roomId, no_rooms)
-  
   cur.close()
   conn.commit()
   return jsonify({"status": True, "booking_id" : bookingId }), 200
-
 
 
 @book_bp.route("/checkout", methods=["POST"])
@@ -80,18 +77,25 @@ def create_payment():
     return jsonify({"status" : False,  "message" : "Booking id not found"}) , 400
   
   if bd["user_email"] != email:
+    bookingService.update_booking_status(cur, bookingId, "CANCELLED")
     return jsonify({"status": False, "message": "Cannot pay for booking for other users"}), 400
   
+  roomId = bd["room_id"]
+  rd = hotelService.get_room_minor_details(cur,roomId)
+  
+  if rd["room_count"] < bd["no_room"]: 
+    return jsonify({"status" : False, "message": "Someone booked this hotel"})
+    
   start_date = bd["start_date"].strftime("%Y-%m-%d")
 
   end_date = bd["end_date"].strftime("%Y-%m-%d")
   
   bd["start_date"] = start_date
   bd["end_date"] = end_date
-  print(bd)
   paymentIntent = stripe.PaymentIntent.create(
     amount=bd["total_price"] * 100, 
     currency="myr", 
+    metadata={"bookingId": bookingId, "email": email},
     payment_method_types=["grabpay", "card"]
   )
   client_secret = paymentIntent.client_secret
@@ -100,7 +104,7 @@ def create_payment():
 
 
 @book_bp.route("/details", methods=["GET"])
-def get_booking_details():
+def get_booking_by_category():
   conn = DB.conn
   cur = conn.cursor() 
   res = loginEndpointMiddleware(cur, request)
@@ -152,3 +156,56 @@ def cancel_booking():
   return jsonify({"status" : True, "message": "Successfully cancelled" })
 
 
+
+@book_bp.route("/<int:id>", methods=["GET"])
+def get_booking_details(id: int):
+  conn = DB.conn
+  cur = conn.cursor() 
+  res = loginEndpointMiddleware(cur, request)
+  if not res["status"]:
+    return res, 403 
+  
+  email = res["payload"]["email"]
+  bd = bookingService.get_minor_booking(cur,id)
+  if not bd: 
+      return jsonify({"status" : False, "message": "Booking id not found" })
+      
+  res = bookingService.getFullBooking(cur,id, email)
+  print(res)
+  start_date = res["b_start"].strftime("%Y-%m-%d")
+  end_date = res["b_end"].strftime("%Y-%m-%d")
+  print(res["b_start"])
+  res["b_start"] = start_date
+  res["b_end"] = end_date
+  cur.close()
+  return jsonify({"status": True, "data": res}), 200
+
+
+
+# Endpoint that can only be triggered by stripe
+@book_bp.route("/webhook", methods=["POST"])
+def check_payment_status():
+    payload = request.json
+    print(payload)
+    event = None
+
+    try:
+      event = stripe.Event.construct_from(
+        payload, stripe.api_key
+      )
+    except ValueError as e:
+      return jsonify({"message": "Invalid Payload"})
+
+    if event.type == 'payment_intent.succeeded':
+      payment_intent = event.data.object
+      conn = DB.conn
+      cur = conn.cursor()
+      bookingId = payment_intent["metadata"]["bookingId"]
+      bd = bookingService.get_minor_booking(cur, bookingId)
+      # Update booking status if payment is successful
+      bookingService.completeBookingPayment(cur, bookingId)
+      hotelService.update_room_count(cur,bd["room_id"], bd["no_room"])
+      print(payment_intent)
+      cur.close()
+      conn.commit()
+    return jsonify({"message": "Thanks Stripe"}), 200

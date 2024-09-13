@@ -13,8 +13,8 @@ def search_hotel(cur, no_adults, no_children, room_num, query, start_price, end_
     ) as room on room.hotel_id = hotel.id
     inner join (SELECT image_url, hotel_id FROM hotel_image where rank = 1) as hi
         on hi.hotel_id = hotel.id
-    WHERE (hotel.city LIKE %s
-          OR HOTEL.name LIKE %s)"""
+    WHERE (LOWER(hotel.city) LIKE LOWER(%s)
+          OR LOWER(HOTEL.name) LIKE LOWER(%s) or LOWER(hotel.address) LIKE LOWER(%s))"""
 
     if start_price:
         sql += """AND (starting_price >= %s
@@ -29,9 +29,9 @@ def search_hotel(cur, no_adults, no_children, room_num, query, start_price, end_
             sql += " ORDER BY starting_price DESC"
     sql = sql + ";"
     if start_price:
-      cur.execute(sql, (no_adults, no_children, room_num, "%"+ query+"%", "%"+ query+"%", start_price, end_price))
+      cur.execute(sql, (no_adults, no_children, room_num, "%"+ query+"%", "%"+ query+"%",  "%"+ query+"%", start_price, end_price))
     else: 
-      cur.execute(sql, (no_adults, no_children, room_num, "%"+ query+"%", "%"+ query+"%"))
+      cur.execute(sql, (no_adults, no_children, room_num, "%"+ query+"%", "%"+ query+"%",  "%"+ query+"%"))
     
     res = cur.fetchall()
     arr = []
@@ -42,7 +42,7 @@ def search_hotel(cur, no_adults, no_children, room_num, query, start_price, end_
 def get_room_details(cur, id:int):
     sql = """
       SELECT room.*, json_agg(ri.image_url) as room_images FROM ROOM
-      inner join room_image ri on ROOM.id = ri.room_id
+      inner join (select image_url, room_id from room_image where rank = 1) ri on ROOM.id = ri.room_id
       where hotel_id = %s
       GROUP BY  room.id;
   """
@@ -65,7 +65,7 @@ def get_hotel_details(cur, id:int, email:str):
     if email:
         sql += " left join  (select * from liked_hotel where user_email = %s) as li on li.hotel_id = hotel.id"
         sqlTuple.append(email)
-    sql += " inner join hotel_image hi on hotel.id = hi.hotel_id where hotel.id =%s group by hotel.id"
+    sql += " inner join (SELECT * FROM hotel_image ORDER BY rank) hi  on hotel.id = hi.hotel_id where hotel.id =%s group by hotel.id"
     sqlTuple.append(id)
 
     if email:
@@ -174,5 +174,28 @@ def get_city(cur, query:str):
 
 
 def update_room_count(cur, roomId : int , no_rooms_booked: int):
-    sql = "UPDATE ROOM SET room_count = %s - 1 where id = %s;"
-    cur.execute(sql, (roomId, no_rooms_booked))
+    sql = "UPDATE ROOM SET room_count = room_count - %s where id = %s;"
+    cur.execute(sql, (no_rooms_booked, roomId))
+
+def getLikedHotels(cur, email:str):
+    sql = """
+        SELECT hotel.id, hotel.name, hotel.address, hotel.description, hotel.rating, hotel.city, hotel.starting_price, hotel.agoda_url,hotel.latitude, hotel.longtitude, hotel.category, hi.image_url from liked_hotel
+        inner join hotel on liked_hotel.hotel_id = hotel.id
+        inner join (SELECT * FROM hotel_image WHERE rank = 1) hi on hi.hotel_id = hotel.id
+        where liked_hotel.user_email = %s"""
+    cur.execute(sql, (email,))
+    res = cur.fetchall()
+    arr = []
+    for item in res:
+        arr.append(convertToDict(item, ["id", "name", "address", "desc", "rating", "city", "price", "agoda_url", "lat", "lng", "category", "img"]))
+    return arr
+
+
+def getPopularHotels(cur):
+    sql = "SELECT hotel.*, hi.image_url FROM HOTEL inner join (select hotel_id , image_url from hotel_image where rank = 1) hi on HOTEL.id = hi.hotel_id where hotel.city != 'Tokyo' ORDER BY hotel.rating DESC LIMIT 20"
+    cur.execute(sql)
+    res = cur.fetchall()
+    arr = []
+    for item in res:
+        arr.append(convertToDict(item, ["id", "name", "address", "desc", "rating", "city", "price", "agoda_url", "lat", "lng", "category", "img"]))
+    return arr

@@ -11,7 +11,7 @@ def search_hotel_endpoint():
   room_num = request.args.get("room_num")
   no_adults = request.args.get("no_adults")
   no_children = request.args.get("no_children")
-  
+  print(room_num, no_adults, no_children)
   # Optional fields 
   start_price = request.args.get("start_price")
   end_price = request.args.get("end_price")
@@ -100,7 +100,6 @@ def like_hotel(id: int):
   
   if not hotelService.does_hotel_exist(cur, id):
     return jsonify({"status": False, "message" : "Hotel not found"}), 404
-
   email = res["payload"]["email"]
   action = "like"
   if hotelService.has_user_like_hotel(cur,id, email): 
@@ -110,6 +109,7 @@ def like_hotel(id: int):
       hotelService.like_hotel(cur,id, email)
   conn.commit()
   cur.close()
+  print(email ,id, action)
   return jsonify({"status": True, "action": action }), 200
 
 
@@ -123,11 +123,31 @@ def getCities():
     return jsonify(res) ,200
 
 
+@hotel_bp.route("/likes/", methods=["GET"])
+def getAllLikes():
+  conn = DB.conn
+  cur = conn.cursor() 
+  res = loginEndpointMiddleware(cur, request)
+  if not res["status"]:
+    return res, 403 
+  
+  email = res["payload"]["email"]
+
+  res = hotelService.getLikedHotels(cur,email)
+  return jsonify(res), 200
+
+
+@hotel_bp.route("/popular/", methods=["GET"])
+def getPopularHotels():
+  conn = DB.conn
+  cur = conn.cursor() 
+  res = hotelService.getPopularHotels(cur)
+  return jsonify(res), 200
 
 # TODAY 
 # Wireless Dev
-# 1. Complete Booking and payment api
-# 2. Complete booking details api
-# 3. Payment api 
-# 4. CRON Job for updating booking details 
-
+# 1. OFFLINE ACCESS
+# 2. HOMEPAGE
+# 3. LIKE PAGE
+# 4. BOOKING ID PAGE
+# 5. TRIPS PAGE

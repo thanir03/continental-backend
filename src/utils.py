@@ -59,7 +59,6 @@ def loginEndpointMiddleware(cur, request):
 
   accessToken = authTokenized[1]
   jwtRes = validateJWT(accessToken)
-  print(jwtRes)
   if not jwtRes["status"]: return jwtRes
   cur.execute("SELECT * FROM APP_USER where email = %s", (jwtRes["payload"]["email"],))
   res = cur.fetchone()
